@@ -118,8 +118,3 @@ Example SMS:
 -   Create a simple dashboard for monitoring all subscribed stocks.
 
 ------------------------------------------------------------------------
-
-## 📄 License
-
-This project is open-source and can be adapted and expanded for personal
-or educational use.
