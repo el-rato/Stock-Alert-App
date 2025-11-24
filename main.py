@@ -5,12 +5,12 @@ import requests
 from twilio.rest import Client
 import os
 ## FUTURE UPDATE
-# from flask import *
+from flask import *
 
-# app = Flask(__name__)
+app = Flask(__name__)
 
 
-# @app.route("/sms", methods=['POST'])
+@app.route("/sms", methods=['POST'])
 # def sms_reply():
 #     """Respond to incoming SMS messages"""
 #     incoming_msg = request.form.get('Body', '').strip().upper()
@@ -74,4 +74,5 @@ if diff_percentage > 5:
             body=message_body,
             to=your_no,
             from_=twilio_no,
+
         )
