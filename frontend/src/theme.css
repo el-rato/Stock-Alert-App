@@ -4575,6 +4575,7 @@ button.primary:hover:not(:disabled),
 @media (max-width: 760px) {
   .topbar { gap: 8px; padding-inline: 12px; }
   .brand-copy small, .user-email, .clock { display: none; }
+  .ticker-tape { display: none; }
   .tabs { padding-inline: 8px; }
   .fn-tab { padding-inline: 10px; }
   .fn-tab .fn { display: none; }
@@ -4593,6 +4594,9 @@ button.primary:hover:not(:disabled),
   .rule-note { grid-column: 1 / 3; margin-left: 48px; }
 }
 @media (max-width: 520px) {
+  .theme-toggle { display: none; }
+  .user-menu .ghost { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; font-size: 0; border: 1px solid var(--border); }
+  .user-menu .ghost::after { content: "↪"; font-size: 14px; }
   .page-heading { align-items: flex-start; flex-direction: column; }
   .alert-metrics { grid-template-columns: 1fr; }
   .alert-metric { min-height: 70px; }
