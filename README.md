@@ -38,6 +38,8 @@ bearish input.
 - **Overview** — market-wide dashboard, indices and watchlist summary
 - **Scanner** — ranked universe scan with verdict, score and capability status
 - **Portfolio** — personal watchlist with quick verdicts
+- **Alerts** — persistent above/below price targets with distance-to-trigger,
+  pause/re-arm controls and automatic terminal notifications
 - **Paper** — simulated portfolio with orders, equity curve, risk, stats and leaderboard
 - **Screener** — filter the universe by fundamental / technical criteria
 - **LSTM** — run and inspect per-symbol price forecasts and model training
@@ -172,6 +174,7 @@ The backend exposes a JSON API under `/api`. Highlights:
 | Analysis | `GET /api/dossier`, `GET /api/analyze`, `GET /api/verdicts`, `GET /api/news` |
 | Universe | `GET /api/scanner`, `GET /api/screener`, `POST /api/refresh`, `GET /api/refresh/status` |
 | Watchlist | `GET/POST /api/watchlist`, `DELETE /api/watchlist` |
+| Price alerts | `GET/POST /api/price-alerts`, `PATCH/DELETE /api/price-alerts/{id}` |
 | Charts & indices | `GET /api/chart/{market}/{ticker}`, `GET /api/indexes`, `GET /api/indexes/{symbol}/history` |
 | Paper trading | `GET /api/paper/portfolio`, `POST /api/paper/order`, `GET /api/paper/stats`, `GET /api/paper/equity`, `GET /api/paper/leaderboard`, … |
 | Simulation | `POST /api/simulate` |
