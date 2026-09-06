@@ -1836,9 +1836,11 @@ class Database:
         last_price: float | None = None,
         triggered_at: str | None = None,
     ) -> dict[str, Any] | None:
-        fields = ["updated_at = ?"]
-        values: list[Any] = [utc_now()]
+        fields: list[str] = []
+        values: list[Any] = []
         if active is not None:
+            fields.append("updated_at = ?")
+            values.append(utc_now())
             fields.append("active = ?")
             values.append(1 if active else 0)
             if active:
@@ -1847,8 +1849,13 @@ class Database:
             fields.append("last_price = ?")
             values.append(float(last_price))
         if triggered_at is not None:
+            if active is None:
+                fields.append("updated_at = ?")
+                values.append(utc_now())
             fields.append("triggered_at = ?")
             values.append(triggered_at)
+        if not fields:
+            return None
         values.append(int(alert_id))
         with self.connect() as conn:
             conn.execute(

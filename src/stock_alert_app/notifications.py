@@ -389,7 +389,9 @@ def _price_target_events(db: Database, now: datetime) -> list[dict[str, Any]]:
             continue
 
         sec = f"{market}:{ticker}"
-        key = f"price_target:{int(rule['id'])}:{now.isoformat()}"
+        # updated_at is the rule revision: stable while monitoring, changed
+        # when the user re-arms it, so every arm can fire exactly once.
+        key = f"price_target:{int(rule['id'])}:{rule['updated_at']}"
         verb = "rose to" if direction == "above" else "fell to"
         note = str(rule.get("note") or "").strip()
         event = _emit(

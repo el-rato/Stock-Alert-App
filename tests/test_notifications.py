@@ -99,6 +99,32 @@ class TestCommitteeChange:
         assert not [e for e in res["new"] if e["type"].startswith("committee")]
 
 
+class TestPriceTargets:
+    def test_above_target_fires_once_and_disarms(self, tmp_path):
+        db = _db(tmp_path)
+        rule = db.create_price_alert("NYSE", "AAPL", "above", 120.0, "Breakout level")
+        db.insert_price_snapshot("NYSE", "AAPL", close=110.0)
+        assert not [e for e in notifications.scan(db, now=_SILENT_NOW)["new"] if e["type"] == "price_target"]
+
+        db.insert_price_snapshot("NYSE", "AAPL", close=121.5)
+        events = [e for e in notifications.scan(db, now=_SILENT_NOW)["new"] if e["type"] == "price_target"]
+        assert len(events) == 1
+        assert events[0]["severity"] == "HIGH"
+        assert events[0]["payload"]["target_price"] == 120.0
+        stored = next(a for a in db.price_alerts() if a["id"] == rule["id"])
+        assert stored["active"] == 0
+        assert stored["triggered_at"]
+        assert not [e for e in notifications.scan(db, now=_SILENT_NOW)["new"] if e["type"] == "price_target"]
+
+    def test_below_target_can_be_rearmed(self, tmp_path):
+        db = _db(tmp_path)
+        rule = db.create_price_alert("LSE", "ULVR", "below", 40.0)
+        db.insert_price_snapshot("LSE", "ULVR", close=39.0)
+        assert len([e for e in notifications.scan(db, now=_SILENT_NOW)["new"] if e["type"] == "price_target"]) == 1
+        db.update_price_alert(rule["id"], active=True)
+        assert len([e for e in notifications.scan(db, now=_SILENT_NOW)["new"] if e["type"] == "price_target"]) == 1
+
+
 class TestTradeEvents:
     def test_significant_trade_fires(self, tmp_path):
         db = _db(tmp_path)
