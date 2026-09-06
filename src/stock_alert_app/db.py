@@ -431,6 +431,24 @@ CREATE TABLE IF NOT EXISTS notification_processed (
     processed_at TEXT NOT NULL
 );
 
+-- User-defined one-shot price thresholds. Rules remain visible after they fire
+-- so the alert history is auditable and a trader can re-arm them.
+CREATE TABLE IF NOT EXISTS price_alert_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    market TEXT NOT NULL,
+    ticker TEXT NOT NULL,
+    direction TEXT NOT NULL CHECK(direction IN ('above', 'below')),
+    target_price REAL NOT NULL CHECK(target_price > 0),
+    note TEXT NOT NULL DEFAULT '',
+    active INTEGER NOT NULL DEFAULT 1,
+    last_price REAL,
+    triggered_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_price_alert_rules_active
+    ON price_alert_rules(active, market, ticker);
+
 CREATE TABLE IF NOT EXISTS fund_filings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cik TEXT NOT NULL,
@@ -1771,6 +1789,83 @@ class Database:
                 keys,
             )
             return cur.rowcount
+
+    # ---- User-defined price alert rules ----
+
+    def create_price_alert(
+        self,
+        market: str,
+        ticker: str,
+        direction: str,
+        target_price: float,
+        note: str = "",
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.connect() as conn:
+            cur = conn.execute(
+                """INSERT INTO price_alert_rules
+                   (market, ticker, direction, target_price, note, active,
+                    created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+                (
+                    market.upper(), ticker.upper(), direction.lower(),
+                    float(target_price), note.strip()[:240], now, now,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM price_alert_rules WHERE id = ?", (cur.lastrowid,)
+            ).fetchone()
+            return dict(row)
+
+    def price_alerts(self, active_only: bool = False) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            sql = "SELECT * FROM price_alert_rules"
+            params: tuple[Any, ...] = ()
+            if active_only:
+                sql += " WHERE active = ?"
+                params = (1,)
+            sql += " ORDER BY active DESC, created_at DESC"
+            rows = conn.execute(sql, params).fetchall()
+            return [dict(row) for row in rows]
+
+    def update_price_alert(
+        self,
+        alert_id: int,
+        *,
+        active: bool | None = None,
+        last_price: float | None = None,
+        triggered_at: str | None = None,
+    ) -> dict[str, Any] | None:
+        fields = ["updated_at = ?"]
+        values: list[Any] = [utc_now()]
+        if active is not None:
+            fields.append("active = ?")
+            values.append(1 if active else 0)
+            if active:
+                fields.append("triggered_at = NULL")
+        if last_price is not None:
+            fields.append("last_price = ?")
+            values.append(float(last_price))
+        if triggered_at is not None:
+            fields.append("triggered_at = ?")
+            values.append(triggered_at)
+        values.append(int(alert_id))
+        with self.connect() as conn:
+            conn.execute(
+                f"UPDATE price_alert_rules SET {', '.join(fields)} WHERE id = ?",
+                values,
+            )
+            row = conn.execute(
+                "SELECT * FROM price_alert_rules WHERE id = ?", (int(alert_id),)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def delete_price_alert(self, alert_id: int) -> bool:
+        with self.connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM price_alert_rules WHERE id = ?", (int(alert_id),)
+            )
+            return cur.rowcount > 0
 
     # ---- Verdict / price history pairs (for change + screener detection) ----
 

@@ -175,6 +175,18 @@ class AckRequest(BaseModel):
     keys: list[str]
 
 
+class PriceAlertCreate(BaseModel):
+    market: str
+    ticker: str
+    direction: str
+    target_price: float
+    note: str = ""
+
+
+class PriceAlertUpdate(BaseModel):
+    active: bool
+
+
 class RegisterRequest(BaseModel):
     email: str
     password: str
@@ -1190,6 +1202,69 @@ def ack_notifications(body: AckRequest) -> dict[str, object]:
     from . import notifications
 
     return notifications.ack(_db(), body.keys)
+
+
+def _price_alert_view(db: Database, rule: dict[str, object]) -> dict[str, object]:
+    """Attach the latest stored quote and distance-to-target to an alert rule."""
+    item = dict(rule)
+    item["active"] = bool(item.get("active"))
+    snapshot = db.latest_price_snapshot(str(item["market"]), str(item["ticker"]))
+    current = float(snapshot.get("close") or 0.0) if snapshot else 0.0
+    target = float(item.get("target_price") or 0.0)
+    item["current_price"] = current or None
+    item["price_as_of"] = snapshot.get("as_of") or snapshot.get("fetched_at") if snapshot else None
+    item["data_status"] = snapshot.get("data_status") or "ready" if snapshot else "no_data"
+    item["distance_pct"] = ((target - current) / current) if current > 0 else None
+    return item
+
+
+@app.get("/api/price-alerts")
+def get_price_alerts() -> list[dict[str, object]]:
+    db = _db()
+    return [_price_alert_view(db, rule) for rule in db.price_alerts()]
+
+
+@app.post("/api/price-alerts")
+def create_price_alert(body: PriceAlertCreate) -> dict[str, object]:
+    market = (body.market or "").strip().upper()
+    ticker = (body.ticker or "").strip().upper()
+    direction = (body.direction or "").strip().lower()
+    if not market or not ticker:
+        raise HTTPException(status_code=422, detail="market and ticker are required")
+    if direction not in {"above", "below"}:
+        raise HTTPException(status_code=422, detail="direction must be above or below")
+    if not 0 < body.target_price < 1_000_000_000:
+        raise HTTPException(status_code=422, detail="target price must be greater than zero")
+    db = _db()
+    rule = db.create_price_alert(
+        market, ticker, direction, body.target_price, body.note,
+    )
+    # Alerted names join the canonical universe so normal refreshes keep their
+    # latest price current even when they are not on the watchlist.
+    try:
+        from .universe import register
+
+        register(db, market, ticker, source="price_alert")
+    except Exception:
+        pass
+    return _price_alert_view(db, rule)
+
+
+@app.patch("/api/price-alerts/{alert_id}")
+def update_price_alert(alert_id: int, body: PriceAlertUpdate) -> dict[str, object]:
+    db = _db()
+    rule = db.update_price_alert(alert_id, active=body.active)
+    if rule is None:
+        raise HTTPException(status_code=404, detail="price alert not found")
+    return _price_alert_view(db, rule)
+
+
+@app.delete("/api/price-alerts/{alert_id}")
+def delete_price_alert(alert_id: int) -> dict[str, object]:
+    removed = _db().delete_price_alert(alert_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="price alert not found")
+    return {"removed": True, "id": alert_id}
 
 
 def _news_importance(score: Any, label: Any) -> str:

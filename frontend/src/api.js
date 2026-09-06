@@ -247,6 +247,30 @@ export async function notificationsAck(keys) {
   });
 }
 
+export async function priceAlerts() {
+  return fetchJSON("/api/price-alerts");
+}
+
+export async function createPriceAlert(body) {
+  return fetchJSON("/api/price-alerts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updatePriceAlert(id, active) {
+  return fetchJSON(`/api/price-alerts/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ active }),
+  });
+}
+
+export async function deletePriceAlert(id) {
+  return fetchJSON(`/api/price-alerts/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 export async function tickerStrip() {
   return fetchJSON("/api/ticker-strip");
 }

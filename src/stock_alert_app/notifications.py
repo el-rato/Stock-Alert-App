@@ -20,6 +20,8 @@ Events:
                             snapshot (IMPORTANT).
 * ``important_news``     — a freshly stored article with a strong sentiment
                             score (IMPORTANT).
+* ``price_target``       — a user-defined above/below price threshold has been
+                            reached (HIGH; the one-shot rule is then disarmed).
 * ``significant_trade``  — a paper trade whose notional is at/above the
                             configured threshold (HIGH), or any LONG<->SHORT
                             reversal regardless of size (HIGH).
@@ -360,6 +362,64 @@ def _important_news_events(db: Database, now: datetime) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# User-defined price targets
+# ---------------------------------------------------------------------------
+
+
+def _price_target_events(db: Database, now: datetime) -> list[dict[str, Any]]:
+    """Fire active one-shot price rules against the latest stored snapshot."""
+    events: list[dict[str, Any]] = []
+    for rule in db.price_alerts(active_only=True):
+        market = str(rule.get("market") or "")
+        ticker = str(rule.get("ticker") or "")
+        snapshot = db.latest_price_snapshot(market, ticker)
+        if not snapshot or str(snapshot.get("data_status") or "ready") != "ready":
+            continue
+        try:
+            current = float(snapshot.get("close") or 0.0)
+            target = float(rule.get("target_price") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if current <= 0 or target <= 0:
+            continue
+        direction = str(rule.get("direction") or "").lower()
+        reached = current >= target if direction == "above" else current <= target
+        if not reached:
+            db.update_price_alert(int(rule["id"]), last_price=current)
+            continue
+
+        sec = f"{market}:{ticker}"
+        key = f"price_target:{int(rule['id'])}:{now.isoformat()}"
+        verb = "rose to" if direction == "above" else "fell to"
+        note = str(rule.get("note") or "").strip()
+        event = _emit(
+            db,
+            key,
+            HIGH,
+            "price_target",
+            f"{sec} PRICE TARGET REACHED",
+            f"{sec} {verb} {current:,.2f}, crossing your {direction} target of "
+            f"{target:,.2f}.{f' {note}' if note else ''}",
+            sec,
+            market,
+            ticker,
+            payload={
+                "alert_id": int(rule["id"]),
+                "direction": direction,
+                "target_price": target,
+                "current_price": current,
+            },
+        )
+        if event:
+            db.update_price_alert(
+                int(rule["id"]), active=False, last_price=current,
+                triggered_at=now.isoformat(),
+            )
+            events.append(event)
+    return events
+
+
+# ---------------------------------------------------------------------------
 # Significant trade detection
 # ---------------------------------------------------------------------------
 
@@ -474,6 +534,7 @@ def scan(db: Database, now: datetime | None = None) -> dict[str, Any]:
         _signal_change_events,
         _market_activity_events,
         _important_news_events,
+        _price_target_events,
         _trade_events,
     )
     for detector in detectors:

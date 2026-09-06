@@ -15,6 +15,7 @@ import NewsTab from "./components/NewsTab.jsx";
 import WorkflowTab from "./components/WorkflowTab.jsx";
 import PortfolioGroups from "./components/PortfolioGroups.jsx";
 import NotificationsBell from "./components/NotificationsBell.jsx";
+import AlertsTab from "./components/AlertsTab.jsx";
 import Drawer from "./components/Drawer.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import SearchBox from "./components/SearchBox.jsx";
@@ -44,19 +45,21 @@ const PRIMARY_TABS = [
   { key: "overview", fn: "F1", label: "OVERVIEW" },
   { key: "scanner", fn: "F2", label: "SCANNER" },
   { key: "portfolio", fn: "F3", label: "PORTFOLIO" },
-  { key: "paper", fn: "F4", label: "PAPER" },
-  { key: "news", fn: "F5", label: "NEWS" },
+  { key: "alerts", fn: "F4", label: "ALERTS" },
+  { key: "paper", fn: "F5", label: "PAPER" },
 ];
 
 const SECONDARY_TABS = [
-  { key: "screener", fn: "F6", label: "SCREENER" },
-  { key: "sim", fn: "F7", label: "SIM / BACKTEST" },
-  { key: "funds", fn: "F8", label: "HEDGE FUNDS" },
-  { key: "workflows", fn: "F9", label: "WORKFLOWS" },
+  { key: "news", fn: "F6", label: "NEWS" },
+  { key: "screener", fn: "F7", label: "SCREENER" },
+  { key: "sim", fn: "F8", label: "SIM / BACKTEST" },
+  { key: "funds", fn: "F9", label: "HEDGE FUNDS" },
+  { key: "workflows", fn: "F10", label: "WORKFLOWS" },
 ];
 
 const TAB_COMPONENTS = {
   overview: OverviewTab,
+  alerts: AlertsTab,
   portfolio: PortfolioTab,
   scanner: ScannerTab,
   screener: ScreenerTab,
@@ -437,16 +440,17 @@ export default function App() {
       ) : (
         <div className="terminal">
           <header className="topbar">
-            <button className="logo" style={{ border: "none", background: "transparent", cursor: "pointer" }} onClick={() => setTab("overview")}>
-              SV<span className="dim"> | STOCK VERDICT</span>
+            <button className="logo" onClick={() => setTab("overview")} aria-label="Open overview">
+              <span className="brand-mark">M</span>
+              <span className="brand-copy">MESH<small>MARKET INTELLIGENCE</small></span>
             </button>
             <TickerTape tickers={tickers} />
             <SearchBox />
             <NotificationsBell />
             <select className="theme-toggle" value={theme} onChange={(e) => setTheme(e.target.value)} title="Theme">
-              <option value="dark">DARK</option>
-              <option value="light">LIGHT</option>
-              <option value="system">SYSTEM</option>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="system">System</option>
             </select>
             <div className="user-menu" title={auth.user?.email || ""}>
               <span className="user-email">{auth.user?.email || "ACCOUNT"}</span>
@@ -493,11 +497,11 @@ export default function App() {
             </div>
           </nav>
 
-          <div className="controls" style={{ padding: "10px 16px 0" }}>
+          <div className="controls shell-controls">
             <div className="field">
               <label>Market</label>
               <select value={market} onChange={(e) => setMarket(e.target.value)}>
-                <option value="">ALL</option>
+                <option value="">All markets</option>
                 {markets.map((m) => (
                   <option key={m.code} value={m.code}>
                     {m.code} — {m.name}
@@ -506,10 +510,10 @@ export default function App() {
               </select>
             </div>
             <button className="primary" onClick={() => ctx.refreshAll()}>
-              ⟳ REFRESH
+              ⟳ Refresh data
             </button>
             <button className="ghost" onClick={() => setTab("overview")}>
-              MARKET PULSE
+              Market pulse
             </button>
           </div>
           <main className="content">
