@@ -291,10 +291,9 @@ export default function OverviewTab() {
 
             {/* Greeting */}
             <header className="ov-greet">
-              <span className="ov-greet-mark">{greet.icon}</span>
               <span className="ov-greet-text">
-                <strong>{greet.opener}</strong>, {username || userEmail?.split("@")[0] || "you"}.{" "}
-                {greet.question}
+                <strong>Market workspace</strong>
+                <span className="dim"> / {username || userEmail?.split("@")[0] || "Overview"}</span>
               </span>
               <button className="ov-setup">⛶ Set Up Profile</button>
             </header>

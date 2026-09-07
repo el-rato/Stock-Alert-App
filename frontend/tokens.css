@@ -1,0 +1,52 @@
+:root {
+  --color-workspace-canvas: oklch(13% 0.012 255);
+  --color-workspace-surface: oklch(17% 0.014 255);
+  --color-workspace-raised: oklch(21% 0.016 255);
+  --color-workspace-rule: oklch(31% 0.018 255);
+  --color-workspace-rule-strong: oklch(43% 0.025 255);
+  --color-workspace-ink: oklch(94% 0.008 255);
+  --color-workspace-muted: oklch(70% 0.02 255);
+  --color-workspace-accent: oklch(75% 0.14 255);
+  --color-workspace-focus: oklch(82% 0.14 255);
+  --color-workspace-scrim: oklch(8% 0.01 255 / 0.78);
+
+  --font-display: "IBM Plex Sans", sans-serif;
+  --font-body: "IBM Plex Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+  --rule-workspace: 1px solid var(--color-workspace-rule);
+  --radius-workspace: 2px;
+}
+
+[data-theme="light"] {
+  --color-workspace-canvas: oklch(97% 0.008 255);
+  --color-workspace-surface: oklch(99% 0.005 255);
+  --color-workspace-raised: oklch(94% 0.012 255);
+  --color-workspace-rule: oklch(82% 0.018 255);
+  --color-workspace-rule-strong: oklch(65% 0.025 255);
+  --color-workspace-ink: oklch(22% 0.018 255);
+  --color-workspace-muted: oklch(48% 0.025 255);
+  --color-workspace-accent: oklch(55% 0.17 255);
+  --color-workspace-focus: oklch(48% 0.18 255);
+  --color-workspace-scrim: oklch(18% 0.015 255 / 0.42);
+}
