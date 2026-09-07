@@ -6,6 +6,7 @@ import { verdictBadge, verdictClass, SectionHeader, StatusIndicator } from "./ui
 import SecurityLink from "./SecurityLink.jsx";
 import AgentPanel from "./AgentPanel.jsx";
 import AgentChat from "./AgentChat.jsx";
+import PriceChart from "./PriceChart.jsx";
 
 function num(v, d = 0) {
   const n = Number(v);
@@ -73,8 +74,11 @@ const SHORTCUTS = [
   { key: "watchlist", label: "watchlist" },
 ];
 
-export default function OverviewTab() {
-  const { indexes, refreshToken, openDrawer, userEmail, username, addToPortfolio, removeFromPortfolio, markets } = useApp();
+export default function OverviewTab({ marketRows = [] }) {
+  const { indexes, refreshToken, openDrawer, theme, portfolioIds, setTab, addToPortfolio, removeFromPortfolio, markets } = useApp();
+  const [chartSelection, setChartSelection] = useState(null);
+  const [chartRange, setChartRange] = useState("1mo");
+  const chartSecurity = chartSelection || indexes?.[0];
   const [verdicts, setVerdicts] = useState([]);
   const [news, setNews] = useState([]);
   const [watch, setWatch] = useState([]);
@@ -233,23 +237,10 @@ export default function OverviewTab() {
     });
 
   return (
-    <div className="overview">
-      <div className="ov-frame">
-        {/* Top index strip */}
-        <div className="ov-strip">
-          {strip.map((s) => {
-            const up = (s.change_pct || 0) >= 0;
-            return (
-              <span key={`${s.market}:${s.symbol}`} className="ov-strip-item" onClick={() => openDrawer({ type: "stock", v: { market: s.market, ticker: s.symbol, company: s.name || "", reason: ["OVERVIEW"] } })}>
-                <span className="ov-strip-sym">{s.symbol}</span>
-                <span className="ov-strip-px">{num(s.close).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                <span className={`ov-strip-chg ${up ? "up" : "down"}`}>{pct(s.change_pct)}</span>
-              </span>
-            );
-          })}
-        </div>
-
-        {/* Command center strip: market status + regime (existing data only) */}
+    <div className="overview market-home">
+      <header className="market-heading">
+        <div><h1>Markets</h1><p>Your view of the trading day.</p></div>
+        <details className="exchange-menu"><summary>Exchange status</summary>        {/* Command center strip: market status + regime (existing data only) */}
         <div className="ov-strip" style={{ opacity: 0.95 }}>
           {(openMarkets.length ? openMarkets : closedMarkets).slice(0, 6).map((m) => {
             const open = m.status?.status === "open";
@@ -271,100 +262,62 @@ export default function OverviewTab() {
           )}
         </div>
 
-        <div className="ov-body">
-          {/* LEFT MAIN */}
-          <main className="ov-main">
-            {/* Shortcuts */}
-            <div className="ov-shortcuts">
-              <div className="ov-panel-label ov-label-chev">
-                SHORTCUTS <span className="ov-chev">❯</span>
-              </div>
-              <div className="ov-shortcut-grid">
-                {SHORTCUTS.map((s) => (
-                  <span key={s.key} className="ov-shortcut">
-                    <span className="ov-shortcut-token">/{s.key}</span>
-                    <span className="ov-shortcut-label">{s.label}</span>
-                  </span>
+</details>
+      </header>
+
+      <div className="market-workspace">
+        <section className="market-primary" aria-label="Market overview">
+          <div className="market-index-selector" aria-label="Chart security">
+            {strip.map((item) => (
+              <button type="button" key={`${item.market}:${item.symbol}`}
+                className={chartSecurity?.symbol === item.symbol && chartSecurity?.market === item.market ? "market-index selected" : "market-index"}
+                onClick={() => setChartSelection(item)}
+                aria-pressed={chartSecurity?.symbol === item.symbol && chartSecurity?.market === item.market}>
+                <span>{item.name || item.symbol}</span>
+                <strong>{num(item.close).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                <small className={(item.change_pct || 0) >= 0 ? "up" : "down"}>{pct(item.change_pct)}</small>
+              </button>
+            ))}
+          </div>
+          <section className="market-chart-section" aria-label="Market movement">
+            <div className="market-chart-heading">
+              <div><h2>{chartSecurity?.name || chartSecurity?.symbol || "Market movement"}</h2><span className="dim">{chartSecurity?.market || "Select a market"} · Price movement</span></div>
+              <div className="market-ranges" aria-label="Chart period">
+                {[["1mo", "1M"], ["3mo", "3M"], ["6mo", "6M"], ["1y", "1Y"]].map(([value, label]) => (
+                  <button key={value} type="button" onClick={() => setChartRange(value)} aria-pressed={chartRange === value}>{label}</button>
                 ))}
               </div>
             </div>
-
-            {/* Greeting */}
-            <header className="ov-greet">
-              <span className="ov-greet-text">
-                <strong>Market workspace</strong>
-                <span className="dim"> / {username || userEmail?.split("@")[0] || "Overview"}</span>
-              </span>
-              <button className="ov-setup">⛶ Set Up Profile</button>
-            </header>
-
-            {/* Agent */}
-            <AgentPanel onOpen={openChat} onAsk={askChat} />
-
-            {/* Committee views */}
-            <div className="ov-card">
-              <SectionHeader title="TOP COMMITTEE VIEWS" />
-              {topVerdicts.length ? (
-                <div className="ov-verdict-grid">
-                  {topVerdicts.map((v) => (
-                    <div key={`${v.market}:${v.ticker}`} className={`ov-panel ${verdictClass(v.verdict)}`} onClick={() => openDossier(v)}>
-                      <div className="ov-panel-head">
-                        <div>
-                          <SecurityLink market={v.market} ticker={v.ticker} className="symbol" style={{ fontSize: 13 }}>{v.ticker}</SecurityLink>
-                          <div className="name">{v.market}</div>
-                        </div>
-                        {verdictBadge(v)}
+            <div className="market-chart-canvas">
+              {chartSecurity?.market && chartSecurity?.symbol ? (
+                <PriceChart url={`/api/chart/${encodeURIComponent(chartSecurity.market)}/${encodeURIComponent(chartSecurity.symbol)}?range=${chartRange}`}
+                  chartType="candlestick" showVolume refreshKey={refreshToken} theme={theme} />
+              ) : <div className="workspace-empty"><strong>Market chart</strong><span>Available index data will appear here.</span></div>}
+            </div>
+          </section>
+          <div className="market-lower">
+            <section className="market-movers">            <div className="ov-rail-box">
+              <div className="ov-panel-label">Market movers</div>
+              {active.length ? (
+                <div className="ov-active-list">
+                  {active.map((a, i) => {
+                    const up = (a.change_pct || 0) >= 0;
+                    return (
+                      <div key={a.security_id || i} className="ov-active-item" onClick={() => openDossier(a)}>
+                        <span className="ov-active-tk">{a.ticker}</span>
+                        <span className="ov-active-px">{num(a.close).toLocaleString()}</span>
+                        <span className={`ov-active-chg ${up ? "up" : "down"}`}>{pct(a.change_pct)}</span>
                       </div>
-                      <div className="conf-bar">
-                        <span style={{ width: (v.confidence * 100).toFixed(0) + "%", background: v.verdict === "BULL" ? "var(--bull)" : v.verdict === "BEAR" ? "var(--bear)" : "var(--neutral)" }} />
-                      </div>
-                      <div className="row"><span className="label">CONFIDENCE</span><span className="value">{(v.confidence * 100).toFixed(0)}%</span></div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="empty">NO VERDICTS YET — RUN A REFRESH.</div>
+                <div className="empty">LOADING…</div>
               )}
             </div>
-          </main>
-
-          {/* RIGHT RAIL */}
-          <aside className="ov-rail">
-            <div className="ov-rail-box">
-              <div className="ov-panel-label">ALERTS &amp; SIGNALS <span className="dim">· LIVE</span></div>
-              {alerts.length ? (
-                <div className="ov-news-list">
-                  {alerts.map((a) => (
-                    <div key={a.id} className="ov-news-item">
-                      <div className="ov-news-meta dim" style={{ marginBottom: 2 }}>
-                        <span>{String(a.type || "").replace(/_/g, " ").toUpperCase()}</span>
-                        {a.security_id && (
-                          <SecurityLink securityId={a.security_id} className="ov-news-tk">
-                            {a.security_id}
-                          </SecurityLink>
-                        )}
-                        <span>{String(a.timestamp || "").slice(0, 16).replace("T", " ")}</span>
-                      </div>
-                      <span className="ov-news-title" style={{ cursor: a.security_id ? "pointer" : "default" }}
-                        onClick={() => {
-                          if (!a.security_id) return;
-                          const [mkt, ...rest] = String(a.security_id).split(":");
-                          if (mkt && rest.length) openDrawer({ type: "stock", v: { market: mkt, ticker: rest.join(":"), company: "", reason: ["ALERT"] } });
-                        }}
-                        title={a.security_id ? `Open Dossier ${a.security_id}` : a.headline}
-                      >
-                        {a.headline}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty">NO ALERTS — COMMITTEE CHANGES, SIGNAL FLIPS, MOVES AND IMPORTANT NEWS APPEAR HERE.</div>
-              )}
-            </div>
-
-            <div className="ov-rail-box ov-news-box">
-              <div className="ov-panel-label">LIVE NEWS <span className="dim">· SCROLL</span></div>
+</section>
+            <section className="market-news">            <div className="ov-rail-box ov-news-box">
+              <div className="ov-panel-label">Market news</div>
               {news.length ? (
                 <div className="ov-news-list">
                   {news.map((n, i) => {
@@ -409,8 +362,72 @@ export default function OverviewTab() {
               )}
             </div>
 
+</section>
+          </div>
+          <details className="secondary-signals"><summary>Committee views &amp; signals</summary>
+                        {/* Committee views */}
+            <div className="ov-card">
+              <SectionHeader title="Committee views" />
+              {topVerdicts.length ? (
+                <div className="ov-verdict-table">
+                  <table className="data-table">
+                    <thead><tr><th>Security</th><th>Market</th><th>Verdict</th><th className="num">Confidence</th></tr></thead>
+                    <tbody>
+                  {topVerdicts.map((v) => (
+                    <tr key={`${v.market}:${v.ticker}`} onClick={() => openDossier(v)}>
+                      <td><SecurityLink market={v.market} ticker={v.ticker} className="symbol">{v.ticker}</SecurityLink></td>
+                      <td className="dim">{v.market}</td>
+                      <td>{verdictBadge(v)}</td>
+                      <td className="num">{(v.confidence * 100).toFixed(0)}%</td>
+                    </tr>
+                  ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="empty">NO VERDICTS YET — RUN A REFRESH.</div>
+              )}
+            </div>
             <div className="ov-rail-box">
-              <div className="ov-panel-label">WATCHLIST</div>
+              <div className="ov-panel-label">ALERTS &amp; SIGNALS <span className="dim">· LIVE</span></div>
+              {alerts.length ? (
+                <div className="ov-news-list">
+                  {alerts.map((a) => (
+                    <div key={a.id} className="ov-news-item">
+                      <div className="ov-news-meta dim" style={{ marginBottom: 2 }}>
+                        <span>{String(a.type || "").replace(/_/g, " ").toUpperCase()}</span>
+                        {a.security_id && (
+                          <SecurityLink securityId={a.security_id} className="ov-news-tk">
+                            {a.security_id}
+                          </SecurityLink>
+                        )}
+                        <span>{String(a.timestamp || "").slice(0, 16).replace("T", " ")}</span>
+                      </div>
+                      <span className="ov-news-title" style={{ cursor: a.security_id ? "pointer" : "default" }}
+                        onClick={() => {
+                          if (!a.security_id) return;
+                          const [mkt, ...rest] = String(a.security_id).split(":");
+                          if (mkt && rest.length) openDrawer({ type: "stock", v: { market: mkt, ticker: rest.join(":"), company: "", reason: ["ALERT"] } });
+                        }}
+                        title={a.security_id ? `Open Dossier ${a.security_id}` : a.headline}
+                      >
+                        {a.headline}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty">NO ALERTS — COMMITTEE CHANGES, SIGNAL FLIPS, MOVES AND IMPORTANT NEWS APPEAR HERE.</div>
+              )}
+            </div>
+
+
+          </details>
+        </section>
+
+        <aside className="market-sidebar" aria-label="Your securities">
+                      <div className="ov-rail-box">
+              <div className="ov-panel-label">Watchlist</div>
               <div className="ov-watch-add">
                 <select
                   className="ov-watch-market"
@@ -424,7 +441,7 @@ export default function OverviewTab() {
                 </select>
                 <input
                   className="ov-watch-input"
-                  placeholder="TICKER (e.g. AAPL)"
+                  placeholder="Add a ticker"
                   value={wlTicker}
                   onChange={(e) => setWlTicker(e.target.value)}
                   onKeyDown={(e) => {
@@ -436,25 +453,61 @@ export default function OverviewTab() {
                 </button>
               </div>
               {watch.length ? (
-                <div className="ov-watch-list">
-                  {watch.slice(0, 6).map((w) => (
-                    <div key={`${w.market}:${w.ticker}`} className="ov-watch-item" onClick={() => openDossier(w)}>
-                      <span className="ov-watch-tk">{w.ticker}</span>
-                      <span className="ov-watch-name dim">{w.market}</span>
-                      {w.verdict && (
-                        <span className={`ov-watch-verdict ${verdictClass(w.verdict)}`}>{w.verdict}</span>
-                      )}
-                      <button className="ov-watch-x" title={`Remove ${w.ticker} from watchlist`} onClick={(e) => removeWatch(e, w)}>✕</button>
-                    </div>
-                  ))}
+                <div className="watchlist-table-wrap">
+                  <table className="watchlist-table">
+                    <thead><tr><th>Ticker</th><th>Price</th><th>Change %</th><th><span className="sr-only">Actions</span></th></tr></thead>
+                    <tbody>{watch.slice(0, 6).map((w) => {
+                      const quote = marketRows.find((row) => row.market === w.market && row.ticker === w.ticker);
+                      const price = quote?.close ?? w.close;
+                      const change = quote?.change_pct ?? w.change_pct;
+                      return (
+                        <tr key={`${w.market}:${w.ticker}`} onClick={() => openDossier(w)}>
+                          <td><SecurityLink market={w.market} ticker={w.ticker}>{w.ticker}</SecurityLink><small>{w.market}</small></td>
+                          <td>{price == null ? "—" : Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className={change == null ? "dim" : change >= 0 ? "up" : "down"}>{change == null ? "—" : pct(change)}</td>
+                          <td><button className="ov-watch-x" title={`Remove ${w.ticker} from watchlist`} onClick={(e) => removeWatch(e, w)}>×</button></td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table>
                 </div>
               ) : (
                 <div className="empty">NO WATCHLIST ITEMS.</div>
               )}
             </div>
 
+
+          <section className="portfolio-brief">
+            <div className="portfolio-brief-heading"><h2>Portfolio</h2><button type="button" onClick={() => setTab("portfolio")}>View portfolio ↗</button></div>
+            <strong className="portfolio-count">{portfolioIds.size}</strong>
+            <span className="dim">Tracked securities</span>
+            <p>Research and monitor your holdings in one place.</p>
+            <button type="button" className="portfolio-open" onClick={() => setTab("portfolio")}>Open portfolio</button>
+          </section>
+        </aside>
+      </div>
+
+      <details className="research-drawer">
+        <summary><span>Research assistant</span><span>Commands &amp; conversations <span aria-hidden="true">↑</span></span></summary>
+        <div className="research-drawer-body">
+          <AgentPanel onOpen={openChat} onAsk={askChat} />
+          <div className="research-drawer-reference">            {/* Shortcuts */}
+            <div className="ov-shortcuts">
+              <div className="ov-panel-label ov-label-chev">
+                SHORTCUTS <span className="ov-chev">❯</span>
+              </div>
+              <div className="ov-shortcut-grid">
+                {SHORTCUTS.map((s) => (
+                  <span key={s.key} className="ov-shortcut">
+                    <span className="ov-shortcut-token">/{s.key}</span>
+                    <span className="ov-shortcut-label">{s.label}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+
             <div className="ov-rail-box">
-              <div className="ov-panel-label">AGENT HISTORY</div>
+              <div className="ov-panel-label">Recent conversations</div>
               {sessions.length ? (
                 <div className="ov-hist-list">
                   {sessions.map((s) => (
@@ -472,29 +525,9 @@ export default function OverviewTab() {
               )}
             </div>
 
-            <div className="ov-rail-box">
-              <div className="ov-panel-label">MOST ACTIVE</div>
-              {active.length ? (
-                <div className="ov-active-list">
-                  {active.map((a, i) => {
-                    const up = (a.change_pct || 0) >= 0;
-                    return (
-                      <div key={a.security_id || i} className="ov-active-item" onClick={() => openDossier(a)}>
-                        <span className="ov-active-tk">{a.ticker}</span>
-                        <span className="ov-active-px">{num(a.close).toLocaleString()}</span>
-                        <span className={`ov-active-chg ${up ? "up" : "down"}`}>{pct(a.change_pct)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="empty">LOADING…</div>
-              )}
-            </div>
-          </aside>
+</div>
         </div>
-      </div>
-
+      </details>
       <AgentChat
         open={chatOpen}
         onClose={closeChat}
@@ -508,6 +541,7 @@ export default function OverviewTab() {
         restoreSession={restore?.session || null}
         restoreNonce={restore?.nonce || 0}
       />
+
     </div>
   );
 }

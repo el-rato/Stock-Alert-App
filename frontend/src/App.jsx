@@ -1033,7 +1033,7 @@ export default function App() {
           <Landing onLogin={() => setAuthMode("login")} onRegister={() => setAuthMode("register")} />
         )
       ) : (
-        <div className="terminal">
+        <div className={`terminal fintech-shell ${appMode === "workspace" ? "is-workspace" : ""}`}>
           <a className="skip-link" href="#main-content">Skip to main content</a>
           <header className="topbar" onClickCapture={interceptWorkspaceSecurityLink}>
             <button className="logo" onClick={() => openStandardTab("overview")} aria-label="Open overview">
@@ -1058,58 +1058,54 @@ export default function App() {
             <span className="clock">{now.toLocaleTimeString()}</span>
           </header>
 
-          <nav className="tabs" aria-label="Primary navigation">
-            {PRIMARY_TABS.map((t) => (
-              <button
-                key={t.key}
-                className={`fn-tab ${appMode === "standard" && tab === t.key ? "active" : ""}`}
-                onClick={() => openStandardTab(t.key)}
-                aria-current={appMode === "standard" && tab === t.key ? "page" : undefined}
-              >
-                <span className="fn">{t.fn}</span>
-                {t.label}
+          <nav className="navigation-rail" aria-label="Primary navigation">
+            <span className="rail-caption">Your markets</span>
+            {[
+              { key: "overview", label: "Overview", icon: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z" },
+              { key: "portfolio", label: "Portfolio", icon: "M3 7h18v14H3z M8 7V3h8v4 M3 12h18" },
+              { key: "alerts", label: "Alerts", icon: "M6 16V9a6 6 0 0 1 12 0v7l2 2H4z M9 21h6" },
+              { key: "paper", label: "Paper", icon: "M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5" },
+              { key: "scanner", label: "Research", icon: "M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14 M15 15l6 6" },
+              { key: "news", label: "News", icon: "M3 4h18v16H3z M7 8h4v4H7z M14 8h4 M14 12h4 M7 16h11" },
+            ].map((item) => (
+              <button key={item.key} type="button"
+                className={appMode === "standard" && tab === item.key ? "rail-link active" : "rail-link"}
+                onClick={() => openStandardTab(item.key)}
+                aria-current={appMode === "standard" && tab === item.key ? "page" : undefined}
+                title={item.label}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" aria-hidden="true"><path d={item.icon} /></svg>
+                <span>{item.label}</span>
               </button>
             ))}
-            <div className="more-wrap" ref={moreRef}>
-              <button
-                className={`fn-tab more-btn ${appMode === "standard" && SECONDARY_TABS.some((t) => t.key === tab) ? "active" : ""}`}
-                onClick={() => setMoreOpen((v) => !v)}
-                aria-expanded={moreOpen}
-                aria-controls="secondary-navigation"
-              >
-                MORE <span className="expand">{moreOpen ? "−" : "+"}</span>
+            <button type="button" className={appMode === "workspace" ? "rail-link active" : "rail-link"}
+              onClick={() => setAppMode("workspace")} title="Workspace"
+              aria-current={appMode === "workspace" ? "page" : undefined}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><path d="M3 4h18v16H3z M3 9h18 M15 9v11" /></svg>
+              <span>Workspace</span>
+            </button>
+            <div className="rail-tools more-wrap" ref={moreRef}>
+              <button type="button" className="rail-link" onClick={() => setMoreOpen((value) => !value)}
+                aria-expanded={moreOpen} aria-controls="secondary-navigation" title="Research tools">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><path d="M4 6h16 M4 12h16 M4 18h16 M8 3v6 M16 9v6 M10 15v6" /></svg>
+                <span>More tools</span>
               </button>
-              {moreOpen && (
-                <div className="more-menu" id="secondary-navigation">
-                  {SECONDARY_TABS.map((t) => (
-                    <button
-                      key={t.key}
-                      className={`more-item ${tab === t.key ? "active" : ""}`}
-                      onClick={() => {
-                        openStandardTab(t.key);
-                        setMoreOpen(false);
-                      }}
-                      aria-current={appMode === "standard" && tab === t.key ? "page" : undefined}
-                    >
-                      <span className="fn">{t.fn}</span>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {moreOpen && <div className="more-menu" id="secondary-navigation">
+                {SECONDARY_TABS.filter((item) => item.key !== "news").map((item) => (
+                  <button key={item.key} className={tab === item.key ? "more-item active" : "more-item"}
+                    onClick={() => { openStandardTab(item.key); setMoreOpen(false); }}
+                    aria-current={appMode === "standard" && tab === item.key ? "page" : undefined}>
+                    {item.label.toLowerCase()} <kbd>{item.fn}</kbd>
+                  </button>
+                ))}
+              </div>}
             </div>
-            <button
-              type="button"
-              className={`fn-tab workspace-entry ${appMode === "workspace" ? "active" : ""}`}
-              onClick={() => setAppMode("workspace")}
-              aria-current={appMode === "workspace" ? "page" : undefined}
-            >
-              <span className="fn">F12</span>
-              WORKSPACE
+            <button type="button" className="rail-command" onClick={() => setCommandOpen(true)}>
+              Commands <kbd>Ctrl K</kbd>
             </button>
           </nav>
 
           {appMode === "standard" && <div className="controls shell-controls">
+            <TickerTape tickers={tickers} />
             <div className="field">
               <label htmlFor="global-market">Market</label>
               <select id="global-market" value={market} onChange={(e) => setMarket(e.target.value)}>
@@ -1152,7 +1148,7 @@ export default function App() {
               />
             ) : (
               <ErrorBoundary key={tab}>
-                <ActiveTab />
+                <ActiveTab marketRows={tickers} />
               </ErrorBoundary>
             )}
           </main>
