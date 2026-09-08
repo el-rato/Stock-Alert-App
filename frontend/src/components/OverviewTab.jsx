@@ -78,6 +78,8 @@ export default function OverviewTab({ marketRows = [] }) {
   const { indexes, refreshToken, openDrawer, theme, portfolioIds, setTab, addToPortfolio, removeFromPortfolio, markets } = useApp();
   const [chartSelection, setChartSelection] = useState(null);
   const [chartRange, setChartRange] = useState("1mo");
+  const [chartType, setChartType] = useState("candlestick");
+  const [chartIndicators, setChartIndicators] = useState(false);
   const chartSecurity = chartSelection || indexes?.[0];
   const [verdicts, setVerdicts] = useState([]);
   const [news, setNews] = useState([]);
@@ -281,17 +283,30 @@ export default function OverviewTab({ marketRows = [] }) {
           </div>
           <section className="market-chart-section" aria-label="Market movement">
             <div className="market-chart-heading">
-              <div><h2>{chartSecurity?.name || chartSecurity?.symbol || "Market movement"}</h2><span className="dim">{chartSecurity?.market || "Select a market"} · Price movement</span></div>
+              <div>
+                <h2>{chartSecurity?.name || chartSecurity?.symbol || "Market movement"}</h2>
+                <span className="dim">{chartSecurity?.market || "Select a market"} · Price movement</span>
+                {chartSecurity?.close != null && <div className="chart-price-row">
+                  <strong className="chart-price">{num(chartSecurity.close).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                  {chartSecurity.change_pct != null && <span className={`chart-change ${chartSecurity.change_pct >= 0 ? "bull" : "bear"}`}>{pct(chartSecurity.change_pct)}</span>}
+                </div>}
+              </div>
               <div className="market-ranges" aria-label="Chart period">
                 {[["1mo", "1M"], ["3mo", "3M"], ["6mo", "6M"], ["1y", "1Y"]].map(([value, label]) => (
                   <button key={value} type="button" onClick={() => setChartRange(value)} aria-pressed={chartRange === value}>{label}</button>
                 ))}
               </div>
             </div>
+            <div className="market-chart-toolbar" role="group" aria-label="Chart display">
+              <button type="button" aria-pressed={chartType === "candlestick"} onClick={() => setChartType("candlestick")}>Candles</button>
+              <button type="button" aria-pressed={chartType === "line"} onClick={() => setChartType("line")}>Line</button>
+              <button type="button" aria-pressed={chartIndicators} onClick={() => setChartIndicators((value) => !value)} title="Show SMA 50 and SMA 200">Indicators</button>
+              <button type="button" disabled title="Comparison is not available in this chart">Compare</button>
+            </div>
             <div className="market-chart-canvas">
               {chartSecurity?.market && chartSecurity?.symbol ? (
                 <PriceChart url={`/api/chart/${encodeURIComponent(chartSecurity.market)}/${encodeURIComponent(chartSecurity.symbol)}?range=${chartRange}`}
-                  chartType="candlestick" showVolume refreshKey={refreshToken} theme={theme} />
+                  chartType={chartType} sma={chartIndicators ? [50, 200] : []} up={(chartSecurity.change_pct || 0) >= 0} showVolume refreshKey={refreshToken} theme={theme} />
               ) : <div className="workspace-empty"><strong>Market chart</strong><span>Available index data will appear here.</span></div>}
             </div>
           </section>

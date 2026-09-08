@@ -104,6 +104,9 @@ function ChartSection({ v, symbol, dossierData }) {
           <div className="chart-price-row">
             <span className="chart-price">{Number.isFinite(close) ? close.toFixed(2) : "N/A"}</span>
             <span className={`chart-change ${up ? "bull" : "bear"}`}>
+              {Number.isFinite(close) && Number.isFinite(open) ? `${up ? "+" : ""}${(close - open).toFixed(2)}` : "—"}
+            </span>
+            <span className={`chart-change ${up ? "bull" : "bear"}`}>
               {up ? "▲" : "▼"} {Math.abs(changePct * 100).toFixed(2)}%
             </span>
           </div>
@@ -111,12 +114,16 @@ function ChartSection({ v, symbol, dossierData }) {
         <div className="chart-controls">
           <div className="chart-range-bar" role="group" aria-label="Timeframe">
             {CHART_RANGES.map((r) => (
-              <button key={r} className={range === r ? "active" : ""} onClick={() => setRange(r)}>
+              <button key={r} className={range === r ? "active" : ""} aria-pressed={range === r} onClick={() => setRange(r)}>
                 {rangeLabel(r)}
               </button>
             ))}
           </div>
           <div className="indicator-bar">
+            <button className={chartType === "candlestick" ? "active" : ""} aria-pressed={chartType === "candlestick"} onClick={() => setChartType("candlestick")}>Candles</button>
+            <button className={chartType === "line" ? "active" : ""} aria-pressed={chartType === "line"} onClick={() => setChartType("line")}>Line</button>
+            <button className={toolsOpen ? "active" : ""} aria-expanded={toolsOpen} onClick={() => setToolsOpen((val) => !val)}>Indicators</button>
+            <button disabled title="Comparison is not available in this chart">Compare</button>
             <button className={showVolume ? "active" : ""} onClick={toggle(setShowVolume)} title="Volume overlay">VOL</button>
             <button className={sma.includes(50) ? "active" : ""} onClick={() => toggleInSet(setSma)(50)} title="SMA 50">MA50</button>
             <button className={sma.includes(200) ? "active" : ""} onClick={() => toggleInSet(setSma)(200)} title="SMA 200">MA200</button>

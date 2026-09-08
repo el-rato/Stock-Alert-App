@@ -1,0 +1,88 @@
+/* Hallmark + Taste: flat chart chrome, clear prices, restrained blue states. */
+.terminal .dossier-chart-pane .chart-pane-head {
+  background: transparent;
+  padding: 12px 12px 10px;
+  gap: 12px;
+}
+.terminal :is(.dossier-chart-pane, .market-chart-section) .chart-price-row {
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+.terminal :is(.dossier-chart-pane, .market-chart-section) .chart-price {
+  color: var(--text);
+  font: 600 28px/1.15 var(--mono);
+  letter-spacing: -0.04em;
+}
+.terminal :is(.dossier-chart-pane, .market-chart-section) .chart-change {
+  font: 500 12px/1.4 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.terminal .chart-controls { gap: 8px; }
+.terminal .chart-controls .indicator-bar { flex-wrap: wrap; gap: 3px; }
+.terminal .chart-controls .chart-range-bar,
+.terminal .market-chart-section .market-ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.terminal .market-chart-section .market-chart-heading { margin-bottom: 12px; }
+.terminal .market-chart-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 0;
+  margin-bottom: 12px;
+  border-block: 1px solid var(--border);
+}
+.terminal :is(.chart-controls, .market-chart-toolbar, .market-ranges) button,
+.terminal .chart-controls .chart-type-select {
+  min-height: 28px;
+  padding: 4px 9px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  font: 500 11px/1.4 var(--sans);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.terminal :is(.chart-controls, .market-chart-toolbar, .market-ranges) button:is(.active, [aria-pressed="true"]) {
+  color: var(--blue);
+  background: var(--accent-surface);
+  border-color: transparent;
+}
+.terminal :is(.chart-controls, .market-chart-toolbar, .market-ranges) button:disabled {
+  color: var(--text-muted);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.terminal :is(.chart-controls, .market-chart-toolbar, .market-ranges) :is(button, select):focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: 2px;
+}
+.terminal .dossier-chart-pane .chart-workspace { padding-top: 12px; }
+.terminal .dossier-chart-pane .chart-legend {
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 12px;
+  color: var(--text-muted);
+}
+.terminal .dossier-chart-pane .chart-tools {
+  background: transparent;
+  border-color: var(--border);
+}
+@media (hover: hover) and (pointer: fine) {
+  .terminal :is(.chart-controls, .market-chart-toolbar, .market-ranges) button:not(:disabled):hover {
+    color: var(--cyan);
+    border-color: transparent;
+    background: var(--bg-hover);
+  }
+}
+@media (max-width: 414px) {
+  .terminal :is(.dossier-chart-pane, .market-chart-section) .chart-price { font-size: 24px; }
+  .terminal .chart-controls { justify-content: flex-start; }
+}

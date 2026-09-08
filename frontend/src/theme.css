@@ -6071,6 +6071,120 @@ kbd {
 .market-home .empty { padding: 16px 0; text-transform: none; font-family: var(--sans); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .fintech-shell summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Hallmark + Taste: charcoal, electric blue, cyan, and vivid market signals. */
+:root,
+.terminal {
+  --bg: #090d12;
+  --bg-panel: #111820;
+  --bg-panel2: #19232e;
+  --bg-hover: #173149;
+  --border: #293b4c;
+  --border-bright: #4a7597;
+  --text: #f4f8ff;
+  --text-dim: #bccde0;
+  --text-muted: #91a8bf;
+  --blue: #459bff;
+  --cyan: #35d5ee;
+  --purple: #ad93ff;
+  --amber: #f5bc51;
+  --amber-dim: #a77929;
+  --bull: #2ce6a0;
+  --bear: #ff746f;
+  --neutral: var(--amber);
+  --info: var(--cyan);
+  --warning: var(--amber);
+  --grid: #22303e;
+  --focus: var(--cyan);
+  --color-accent-ink: #07111d;
+  --accent: var(--blue);
+  --accent-hover: #70b6ff;
+  --accent-active: #35d5ee;
+  --accent-surface: #142e48;
+  --color-workspace-canvas: var(--bg);
+  --color-workspace-surface: var(--bg-panel);
+  --color-workspace-raised: var(--bg-panel2);
+  --color-workspace-rule: var(--border);
+  --color-workspace-rule-strong: var(--border-bright);
+  --color-workspace-ink: var(--text);
+  --color-workspace-muted: var(--text-muted);
+  --color-workspace-accent: var(--accent);
+  --color-workspace-focus: var(--focus);
+}
+
+[data-theme="light"],
+[data-theme="light"] .terminal,
+.terminal[data-theme="light"] {
+  --bg: #edf4fc;
+  --bg-panel: #ffffff;
+  --bg-panel2: #e5effa;
+  --bg-hover: #d7eaff;
+  --border: #c2d4e8;
+  --border-bright: #688bac;
+  --text: #102238;
+  --text-dim: #354e68;
+  --text-muted: #516b85;
+  --blue: #0865d5;
+  --cyan: #007990;
+  --purple: #7046ce;
+  --amber: #956000;
+  --amber-dim: #ab7925;
+  --bull: #008255;
+  --bear: #cd383e;
+  --neutral: var(--amber);
+  --info: var(--cyan);
+  --warning: var(--amber);
+  --grid: #d4e2f1;
+  --focus: var(--blue);
+  --color-accent-ink: #ffffff;
+  --accent: var(--blue);
+  --accent-hover: #0757b8;
+  --accent-active: #064b9e;
+  --accent-surface: #d7eaff;
+}
+
+:is(.logo, .lp-brand, .section-head, .search-add, .add-portfolio),
+.terminal :is(.brand-mark, .portfolio-brief-heading button, .command-trigger) {
+  color: var(--accent);
+}
+
+button.primary, .button-primary,
+.terminal :is(button.primary, .button-primary) {
+  color: var(--color-accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.terminal :is(.rail-link.active, .fn-tab.active, .agent-tab.active),
+.terminal .market-ranges button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-surface);
+}
+.terminal .fn-tab.active::after { background: var(--cyan); }
+.terminal .market-index.selected { border-bottom-color: var(--cyan); }
+.terminal .workspace-panel:focus-within { border-color: var(--focus); }
+
+@media (hover: hover) and (pointer: fine) {
+  .terminal button:not(:disabled):not(.primary):not(.button-primary):hover {
+    color: var(--cyan);
+    background: var(--bg-hover);
+    border-color: var(--accent);
+  }
+  button.primary:not(:disabled):hover, .button-primary:not(:disabled):hover,
+  .terminal :is(button.primary, .button-primary):not(:disabled):hover {
+    color: var(--color-accent-ink);
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+  .terminal :is(a, summary):hover { color: var(--accent); }
+}
+
+.terminal button:not(:disabled):active { background-color: var(--accent-surface); }
+.terminal :is(button.primary, .button-primary):not(:disabled):active {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+}
+::selection { color: var(--text); background: var(--accent-surface); }
 @media (max-width: 1200px) {
   .terminal.fintech-shell { grid-template-columns: 140px minmax(0, 1fr); }
   .terminal .market-home { padding: 24px 20px 0; }

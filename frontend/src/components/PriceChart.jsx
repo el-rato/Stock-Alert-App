@@ -8,6 +8,7 @@ import {
 } from "chartjs-chart-financial";
 import "chartjs-adapter-date-fns";
 import { fetchJSON } from "../api.js";
+import "./chart.css";
 
 Chart.register(...registerables, CandlestickController, CandlestickElement, OhlcController, OhlcElement);
 
@@ -184,8 +185,8 @@ const currentPricePlugin = {
     const ctx = chart.ctx;
     ctx.save();
     ctx.strokeStyle = options.color || "#f5a623";
-    ctx.setLineDash([4, 3]);
-    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 5]);
+    ctx.lineWidth = 0.65;
     ctx.beginPath();
     ctx.moveTo(area.left, y);
     ctx.lineTo(area.right, y);
@@ -209,9 +210,9 @@ const crosshairPlugin = {
     const ctx = chart.ctx;
     if (element.x < area.left || element.x > area.right) return;
     ctx.save();
-    ctx.strokeStyle = "rgba(245,166,35,0.35)";
-    ctx.setLineDash([3, 3]);
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = cssColor("--text-muted", "#91a8bf") + "66";
+    ctx.setLineDash([2, 5]);
+    ctx.lineWidth = 0.75;
     ctx.beginPath();
     ctx.moveTo(element.x, area.top);
     ctx.lineTo(element.x, area.bottom);
@@ -320,7 +321,7 @@ export default function PriceChart({
     const muted = cssColor("--text-muted", "#5a6b73");
     const border = cssColor("--border", "#232b30");
     const priceColor = lineColor || (up ? bull : bear);
-    const candleColors = { up: bear, down: bull, unchanged: amber };
+    const candleColors = { up: bull, down: bear, unchanged: muted };
 
     // ---- Main price chart ----
     const mainDatasets = [];
@@ -331,6 +332,8 @@ export default function PriceChart({
         data: rows.map((r) => ({ x: r.time.getTime(), o: r.open, h: r.high, l: r.low, c: r.close, volume: r.volume })),
         color: candleColors,
         borderColor: candleColors,
+        backgroundColors: candleColors,
+        borderColors: candleColors,
         borderWidth: 1,
         barPercentage: 0.95,
         categoryPercentage: 1,
@@ -356,7 +359,7 @@ export default function PriceChart({
         label: "VOLUME",
         yAxisID: "volume",
         data: rows.map((r) => ({ x: r.time.getTime(), y: r.volume })),
-        backgroundColor: rows.map((r) => (r.close >= r.open ? `${bull}55` : `${bear}55`)),
+        backgroundColor: rows.map((r) => (r.close >= r.open ? `${bull}28` : `${bear}28`)),
         borderWidth: 0,
         barPercentage: 1,
         categoryPercentage: 1,
@@ -394,11 +397,13 @@ export default function PriceChart({
       type: "time",
       offset: true,
       display: !hideAxes,
-      grid: { color: `${border}66` },
+      grid: { color: `${border}40`, drawTicks: false },
+      border: { display: false },
       ticks: {
         color: muted,
         maxTicksLimit: 10,
-        font: { size: 9, family: "IBM Plex Mono" },
+        font: { size: 10, family: "IBM Plex Mono" },
+        padding: 10,
         maxRotation: 0,
         autoSkip: true,
       },
@@ -417,8 +422,9 @@ export default function PriceChart({
         type: logScale && mode !== "bars" ? "logarithmic" : "linear",
         display: !hideAxes,
         position: "right",
-        grid: { color: `${border}66` },
-        ticks: { color: muted, font: { size: 9, family: "IBM Plex Mono" } },
+        grid: { color: `${border}55`, drawTicks: false },
+        border: { display: false },
+        ticks: { color: muted, padding: 10, font: { size: 10, family: "IBM Plex Mono" } },
       },
     };
     if (showVolume) {
@@ -445,20 +451,24 @@ export default function PriceChart({
             if (charts.current.main) charts.current.main.canvas.style.cursor = "crosshair";
           },
           plugins: {
-            currentPriceLine: { value: rows[rows.length - 1].close, color: amber },
+            currentPriceLine: { value: rows[rows.length - 1].close, color: blue },
             crosshair: true,
             legend: { display: !hideAxes && overlayDefs.length > 0, labels: { color: muted, boxWidth: 12, font: { size: 10, family: "IBM Plex Mono" } } },
             tooltip: {
               enabled: !hideAxes,
               mode: "index",
               intersect: false,
-              backgroundColor: "rgba(7,9,11,0.92)",
+              backgroundColor: cssColor("--bg-panel", "#111820"),
               borderColor: border,
               borderWidth: 1,
-              titleColor: amber,
-              bodyColor: muted,
-              titleFont: { size: 10, family: "IBM Plex Mono" },
-              bodyFont: { size: 10, family: "IBM Plex Mono" },
+              titleColor: cssColor("--text", "#f4f8ff"),
+              bodyColor: cssColor("--text-dim", "#bccde0"),
+              padding: 12,
+              cornerRadius: 3,
+              titleMarginBottom: 8,
+              bodySpacing: 6,
+              titleFont: { size: 11, family: "IBM Plex Mono" },
+              bodyFont: { size: 11, family: "IBM Plex Mono" },
               callbacks: {
                 title(context) {
                   const raw = context[0]?.raw;
