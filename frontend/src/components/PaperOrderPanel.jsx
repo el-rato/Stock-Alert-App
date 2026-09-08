@@ -53,7 +53,10 @@ export default function PaperOrderPanel({ ticket, onClose }) {
         setPf(p);
         const pos = (p.positions || []).find((x) => x.market === market && x.ticker === ticker);
         setSide(sideFromAction(ticket?.action, pos));
-        if (pos && String(ticket?.action || "").toUpperCase() === "CLOSE") setReduceOnly(true);
+        const action = String(ticket?.action || "").toUpperCase();
+        if (pos && (action === "CLOSE" || (action === "SELL" && pos.side === "long") || (action === "COVER" && pos.side === "short"))) {
+          setReduceOnly(true);
+        }
       })
       .catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps

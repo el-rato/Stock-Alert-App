@@ -295,7 +295,7 @@ export default function PaperTab() {
       ) : (
         <div className="paper-table">
           <div className="paper-row paper-row-head"><span>TIME</span><span>SIDE</span><span>TYPE</span><span>SECURITY</span><span>QTY</span><span>FILLED</span><span>AVG</span><span>STATUS</span><span></span></div>
-          {[...orders].reverse().slice(0, 40).map((o) => (
+          {orders.slice(0, 40).map((o) => (
             <div className="paper-row" key={o.id}>
               <span>{String(o.created_at).slice(11, 19)}</span>
               <span className={o.side === "buy" ? "up" : "down"}>{o.side.toUpperCase()}</span>

@@ -230,6 +230,115 @@ class TestPaperEngine:
         paper.pt_delete_portfolio(db, p["id"])
         assert paper.pt_list_portfolios(db, "u1") == []
 
+    def test_reset_preserves_account_identity_and_clears_trading_state(self, tmp_path, monkeypatch):
+        db, p = self._setup(tmp_path, monkeypatch, price=100.0)
+        paper.pt_place_order(db, p["id"], "NYSE", "T", "buy", "market", 10.0)
+
+        reset = paper.pt_reset_portfolio(db, p["id"])
+
+        assert reset["id"] == p["id"]
+        assert reset["name"] == p["name"]
+        assert reset["balance"] == pytest.approx(p["initial_balance"])
+        assert db.pt_get_orders(p["id"]) == []
+        assert db.pt_get_positions(p["id"]) == []
+        assert db.pt_get_trades(p["id"]) == []
+
+    def test_equity_and_buying_power_use_margin_accounting(self, tmp_path, monkeypatch):
+        db, p = self._setup(tmp_path, monkeypatch, price=100.0, leverage=5.0)
+        paper.pt_place_order(db, p["id"], "NYSE", "T", "sell", "market", 10.0, product="MIS")
+
+        state = paper.pt_portfolio_state(db, p["id"], record_equity=False)
+
+        assert state["cash"] == pytest.approx(99800.0)
+        assert state["buying_power"] == pytest.approx(99800.0)
+        assert state["equity"] == pytest.approx(100000.0)
+
+    def test_reduce_only_rejects_missing_or_excess_shares(self, tmp_path, monkeypatch):
+        db, p = self._setup(tmp_path, monkeypatch, price=100.0)
+        with pytest.raises(ValueError, match="Insufficient shares"):
+            paper.pt_place_order(db, p["id"], "NYSE", "T", "sell", "market", 1.0, reduce_only=True)
+        paper.pt_place_order(db, p["id"], "NYSE", "T", "buy", "market", 2.0)
+        with pytest.raises(ValueError, match="Insufficient shares"):
+            paper.pt_place_order(db, p["id"], "NYSE", "T", "sell", "market", 3.0, reduce_only=True)
+        assert len(db.pt_get_orders(p["id"], "rejected")) == 2
+
+    def test_completed_order_cannot_be_cancelled_or_overfilled(self, tmp_path, monkeypatch):
+        db, p = self._setup(tmp_path, monkeypatch, price=100.0)
+        order = paper.pt_place_order(db, p["id"], "NYSE", "T", "buy", "market", 2.0)
+        with pytest.raises(ValueError, match="not cancellable"):
+            paper.pt_cancel_order(db, order["id"])
+        assert db.pt_get_order(order["id"])["status"] == "filled"
+
+        pending = paper.pt_place_order(db, p["id"], "NYSE", "T", "buy", "limit", 2.0, price=90.0)
+        with pytest.raises(ValueError, match="remaining"):
+            paper.pt_fill_order(db, pending["id"], 90.0, fill_qty=3.0)
+
+    def test_limit_orders_fill_only_at_market_price_on_favorable_cross(self, tmp_path, monkeypatch):
+        prices = iter([94.0, 106.0])
+        monkeypatch.setattr(paper, "_execution_price", lambda db, sym, m, t: next(prices))
+        monkeypatch.setattr(paper, "settings", dataclasses.replace(paper.settings, paper_slippage=0.0))
+        db = _db(tmp_path)
+        p = paper.pt_create_portfolio(db, "Main", 100000.0, fee_rate=0.0)
+        buy = paper.pt_place_order(db, p["id"], "NYSE", "T", "buy", "limit", 1.0, price=95.0)
+        assert paper.pt_process_pending_orders(db, p["id"]) == 1
+        assert db.pt_get_order(buy["id"])["avg_price"] == pytest.approx(94.0)
+        sell = paper.pt_place_order(db, p["id"], "NYSE", "T", "sell", "limit", 1.0, price=105.0)
+        assert paper.pt_process_pending_orders(db, p["id"]) == 1
+        assert db.pt_get_order(sell["id"])["avg_price"] == pytest.approx(106.0)
+
+    def test_partial_limit_order_remains_open_and_fills_remaining_quantity(self, tmp_path, monkeypatch):
+        db, p = self._setup(tmp_path, monkeypatch, price=93.0)
+        order = paper.pt_place_order(db, p["id"], "NYSE", "T", "buy", "limit", 2.0, price=95.0)
+        paper.pt_fill_order(db, order["id"], 94.0, fill_qty=1.0)
+        assert db.pt_get_order(order["id"])["status"] == "partial"
+
+        assert paper.pt_process_pending_orders(db, p["id"]) == 1
+        filled = db.pt_get_order(order["id"])
+        assert filled["status"] == "filled"
+        assert filled["filled_qty"] == pytest.approx(2.0)
+        assert filled["avg_price"] == pytest.approx(93.5)
+
+    def test_realized_and_unrealized_pnl_include_fees(self, tmp_path, monkeypatch):
+        prices = iter([100.0, 110.0, 110.0])
+        monkeypatch.setattr(paper, "_execution_price", lambda db, sym, m, t: next(prices))
+        monkeypatch.setattr(paper, "settings", dataclasses.replace(paper.settings, paper_slippage=0.0))
+        db = _db(tmp_path)
+        p = paper.pt_create_portfolio(db, "Main", 100000.0, fee_rate=0.001)
+        paper.pt_place_order(db, p["id"], "NYSE", "T", "buy", "market", 10.0)
+        open_state = paper.pt_portfolio_state(db, p["id"], record_equity=False)
+        assert open_state["unrealized_pnl"] == pytest.approx(100.0)
+        assert open_state["realized_pnl"] == pytest.approx(-1.0)
+        assert open_state["equity"] == pytest.approx(100099.0)
+
+        paper.pt_place_order(db, p["id"], "NYSE", "T", "sell", "market", 10.0)
+        closed = paper.pt_portfolio_state(db, p["id"], record_equity=False)
+        assert closed["realized_pnl"] == pytest.approx(97.9)
+        assert closed["equity"] == pytest.approx(100097.9)
+
+    def test_market_order_uses_latest_price_without_synthetic_slippage(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(paper, "_execution_price", lambda db, sym, m, t: 123.45)
+        monkeypatch.setattr(paper, "settings", dataclasses.replace(paper.settings, paper_slippage=0.25))
+        db = _db(tmp_path)
+        p = paper.pt_create_portfolio(db, "Main", 100000.0, fee_rate=0.0)
+
+        order = paper.pt_place_order(db, p["id"], "NYSE", "T", "buy", "market", 1.0)
+
+        assert order["avg_price"] == pytest.approx(123.45)
+
+    def test_stop_limit_does_not_fake_fill_through_limit(self, tmp_path, monkeypatch):
+        prices = iter([105.0, 100.5])
+        monkeypatch.setattr(paper, "_execution_price", lambda db, sym, m, t: next(prices))
+        db = _db(tmp_path)
+        p = paper.pt_create_portfolio(db, "Main", 100000.0, fee_rate=0.0)
+        order = paper.pt_place_order(
+            db, p["id"], "NYSE", "T", "buy", "stop_limit", 1.0, price=101.0, stop_price=100.0
+        )
+
+        assert paper.pt_process_pending_orders(db, p["id"]) == 0
+        assert db.pt_get_order(order["id"])["status"] == "pending"
+        assert paper.pt_process_pending_orders(db, p["id"]) == 1
+        assert db.pt_get_order(order["id"])["avg_price"] == pytest.approx(100.5)
+
 
 class TestPerformance:
     def test_metrics_derived(self, tmp_path):

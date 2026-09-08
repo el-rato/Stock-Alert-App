@@ -1411,6 +1411,13 @@ class Database:
                 "UPDATE pt_orders SET status = 'cancelled' WHERE id = ?", (order_id,)
             )
 
+    def pt_reject_order(self, order_id: str, reason: str) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE pt_orders SET status = 'rejected', reason = ? WHERE id = ?",
+                (reason, order_id),
+            )
+
     def pt_get_orders(self, portfolio_id: str, status: str = "") -> list[dict[str, Any]]:
         with self.connect() as conn:
             if status:

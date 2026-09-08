@@ -340,7 +340,7 @@ def refresh_evaluations(db: Database, force: bool = False) -> dict[str, Any]:
 #   * Market hours are generalized per exchange (NSE/BSE IST, NYSE ET, LSE GMT,
 #     ...); unknown exchanges are 24/7. Fixed UTC offsets (no DST). Enforcement
 #     is opt-in per portfolio (default OFF).
-#   * Market orders auto-fill at the latest stored price (+ slippage). Limit /
+#   * Market orders auto-fill at the latest stored price. Limit /
 #     stop / stop_limit orders rest pending and are filled by
 #     `pt_process_pending_orders` when a fresher price crosses the trigger.
 #   * The rejection contract is preserved: an order that fails the margin or
@@ -535,18 +535,18 @@ def pt_delete_portfolio(db: Database, portfolio_id: str) -> None:
 
 
 def pt_reset_portfolio(db: Database, portfolio_id: str) -> dict[str, Any]:
-    pt_get_portfolio(db, portfolio_id)
+    portfolio = pt_get_portfolio(db, portfolio_id)
     with _fill_lock:
-        db.pt_delete_portfolio(portfolio_id)  # cascades to orders/positions/trades/blocks
-        portfolio = pt_create_portfolio(
-            db,
-            name="Main",
-            balance=settings.paper_starting_cash,
-            user_id="",
-            leverage=1.0,
-            fee_rate=0.001,
-        )
-        # Preserve the original id + name by re-creating with the same id.
+        with db.transaction() as conn:
+            for table in ("pt_trades", "pt_margin_blocks", "pt_positions", "pt_orders"):
+                conn.execute(f"DELETE FROM {table} WHERE portfolio_id = ?", (portfolio_id,))
+            conn.execute("DELETE FROM paper_equity_points WHERE session_id = ?", (portfolio_id,))
+            conn.execute(
+                "UPDATE pt_portfolios SET balance = initial_balance WHERE id = ?",
+                (portfolio_id,),
+            )
+        with _config_lock:
+            _leverage_configs.pop(portfolio_id, None)
     return pt_get_portfolio(db, portfolio_id)
 
 
@@ -681,6 +681,26 @@ def pt_place_order(
     with _fill_lock:
         portfolio = pt_get_portfolio(db, portfolio_id)
 
+        if reduce_only:
+            opposite_side = "short" if side == "buy" else "long"
+            opposite = db.pt_find_position(portfolio_id, market, ticker, opposite_side)
+            available = float(opposite["quantity"]) if opposite else 0.0
+            committed = sum(
+                max(0.0, float(item["quantity"]) - float(item["filled_qty"]))
+                for status in ("pending", "partial")
+                for item in db.pt_get_orders(portfolio_id, status)
+                if bool(item["reduce_only"])
+                and item["side"] == side
+                and item["market"] == market
+                and item["ticker"] == ticker.upper()
+            )
+            if quantity > max(0.0, available - committed) + 1e-9:
+                _reject_order(
+                    db, portfolio_id, user_id, market, ticker, side, order_type, quantity,
+                    price, stop_price, reduce_only, product, exchange, decision_id,
+                    "Insufficient shares for reduce-only order",
+                )
+
         if portfolio["enforce_market_hours"] and exchange and not pt_is_market_open(exchange):
             _reject_order(
                 db, portfolio_id, user_id, market, ticker, side, order_type, quantity,
@@ -688,7 +708,7 @@ def pt_place_order(
                 f"Market closed for exchange {exchange}",
             )
 
-        # Market orders fill immediately at the latest price (+ slippage). Resolve
+        # Market orders fill immediately at the latest price. Resolve
         # that price ONCE here so margin calculation and the fill use the same
         # reference (a second fetch could return a stale/different quote).
         market_ref = None
@@ -724,11 +744,12 @@ def pt_place_order(
                 margin_to_block = pt_calculate_required_margin(
                     db, portfolio_id, market, ticker, product, net_new, ref, side
                 )
-                if margin_to_block > float(portfolio["balance"]) + 1e-6:
+                estimated_fee = quantity * ref * float(portfolio["fee_rate"])
+                if margin_to_block + estimated_fee > float(portfolio["balance"]) + 1e-6:
                     _reject_order(
                         db, portfolio_id, user_id, market, ticker, side, order_type, quantity,
                         price, stop_price, reduce_only, product, exchange, decision_id,
-                        "Insufficient margin",
+                        "Insufficient buying power",
                     )
 
         order = {
@@ -748,24 +769,25 @@ def pt_place_order(
                 _new_id(), portfolio_id, order["id"], order["security_id"], margin_to_block
             )
 
-        # Market orders fill immediately at the resolved reference price (+ slippage).
+        # Market orders fill immediately at the latest resolved market price.
         if order_type == "market":
-            slip = float(settings.paper_slippage)
-            fill_price = market_ref * (1.0 + slip) if side == "buy" else market_ref * (1.0 - slip)
-            _fill_order_impl(db, order["id"], fill_price, None, _now_iso())
+            _fill_order_impl(db, order["id"], market_ref, None, _now_iso())
 
         return db.pt_get_order(order["id"])
 
 
 def pt_cancel_order(db: Database, order_id: str) -> None:
     with _fill_lock:
+        order = db.pt_get_order(order_id)
+        if order is None:
+            raise ValueError("Order not found")
+        if order["status"] not in ("pending", "partial"):
+            raise ValueError(f"Order is not cancellable ({order['status']})")
         blocked = db.pt_get_margin_block(order_id)
         if blocked > 0.0:
-            order = db.pt_get_order(order_id)
-            if order:
-                portfolio = db.pt_get_portfolio(order["portfolio_id"])
-                if portfolio:
-                    db.pt_update_balance(portfolio["id"], float(portfolio["balance"]) + blocked)
+            portfolio = db.pt_get_portfolio(order["portfolio_id"])
+            if portfolio:
+                db.pt_update_balance(portfolio["id"], float(portfolio["balance"]) + blocked)
             db.pt_delete_margin_block(order_id)
         db.pt_cancel_order(order_id)
 
@@ -802,9 +824,12 @@ def _fill_order_impl(
         raise ValueError("Order not fillable")
 
     portfolio = db.pt_get_portfolio(order["portfolio_id"])
-    qty = fill_qty if fill_qty is not None else (float(order["quantity"]) - float(order["filled_qty"]))
+    remaining_qty = float(order["quantity"]) - float(order["filled_qty"])
+    qty = fill_qty if fill_qty is not None else remaining_qty
     if qty <= 0.0:
         raise ValueError("Nothing left to fill")
+    if qty > remaining_qty + 1e-9:
+        raise ValueError("Fill quantity exceeds remaining order quantity")
     fee_rate = float(portfolio["fee_rate"])
     fee = qty * fill_price * fee_rate
     now = fill_time or _now_iso()
@@ -914,6 +939,10 @@ def _fill_order_impl(
                     (_new_id(), order["portfolio_id"], order_id, order.get("security_id", ""), remaining),
                 )
 
+        resulting_balance = float(portfolio["balance"]) + balance_delta
+        if resulting_balance < -1e-6:
+            raise ValueError("Insufficient buying power at execution price")
+
         conn.execute(
             "UPDATE pt_portfolios SET balance = balance + ? WHERE id = ?",
             (balance_delta, order["portfolio_id"]),
@@ -931,7 +960,7 @@ def _fill_order_impl(
             "id": _new_id(), "portfolio_id": order["portfolio_id"], "order_id": order_id,
             "security_id": order.get("security_id", ""), "market": order["market"],
             "ticker": order["ticker"], "side": order["side"], "price": fill_price,
-            "quantity": qty, "fee": fee, "pnl": pnl, "timestamp": now,
+            "quantity": qty, "fee": fee, "pnl": pnl - fee, "timestamp": now,
         }
         conn.execute(
             """INSERT INTO pt_trades
@@ -1045,12 +1074,13 @@ def pt_portfolio_state(db: Database, portfolio_id: str, record_equity: bool = Tr
     net = long_value - short_value
 
     cash = float(portfolio["balance"])
-    equity = cash + net
+    unrealized = sum(float(p.get("unrealized_pnl", 0.0)) for p in positions)
+    held_margin = sum(float(p.get("held_margin", 0.0)) for p in positions)
+    equity = cash + held_margin + unrealized
     initial = float(portfolio["initial_balance"])
     # Realized P&L is the sum of every closed trade's pnl (positions are deleted
     # on full close, so it cannot be read from pt_positions).
     realized_total = sum(float(t["pnl"]) for t in db.pt_get_trades(portfolio_id, limit=100000))
-    unrealized = sum(float(p.get("unrealized_pnl", 0.0)) for p in positions)
     total_pnl = realized_total + unrealized
     day_pct = (total_pnl / initial * 100) if initial else 0.0
 
@@ -1083,6 +1113,7 @@ def pt_portfolio_state(db: Database, portfolio_id: str, record_equity: bool = Tr
         "starting_cash": initial,
         "currency": portfolio.get("currency", "USD"),
         "cash": round(cash, 2),
+        "buying_power": round(max(0.0, cash), 2),
         "equity": round(equity, 2),
         "long_value": round(long_value, 2),
         "short_value": round(short_value, 2),
@@ -1263,7 +1294,7 @@ def pt_process_pending_orders(db: Database, portfolio_id: str) -> int:
     latest stored price. Called by the background refresh loop. Returns the
     number of orders filled."""
     filled = 0
-    pending = db.pt_get_orders(portfolio_id, "pending")
+    pending = db.pt_get_orders(portfolio_id, "pending") + db.pt_get_orders(portfolio_id, "partial")
     for o in pending:
         if o["order_type"] == "market":
             continue
@@ -1291,12 +1322,10 @@ def pt_process_pending_orders(db: Database, portfolio_id: str) -> int:
             elif side == "sell" and last <= (stop or float("inf")):
                 trigger = True
         elif otype == "stop_limit":
-            if side == "buy" and last >= (stop or 0):
+            if side == "buy" and last >= (stop or 0) and last <= (limit or 0):
                 trigger = True
-                fill_price = limit if (limit and limit <= last) else last
-            elif side == "sell" and last <= (stop or float("inf")):
+            elif side == "sell" and last <= (stop or float("inf")) and last >= (limit or float("inf")):
                 trigger = True
-                fill_price = limit if (limit and limit >= last) else last
         if not trigger:
             continue
         try:
@@ -1304,6 +1333,13 @@ def pt_process_pending_orders(db: Database, portfolio_id: str) -> int:
                 _fill_order_impl(db, o["id"], fill_price, None, _now_iso())
             filled += 1
         except Exception as exc:
+            if isinstance(exc, ValueError) and "Insufficient buying power" in str(exc):
+                blocked = db.pt_get_margin_block(o["id"])
+                portfolio = db.pt_get_portfolio(o["portfolio_id"])
+                if blocked > 0.0 and portfolio:
+                    db.pt_update_balance(o["portfolio_id"], float(portfolio["balance"]) + blocked)
+                    db.pt_delete_margin_block(o["id"])
+                db.pt_reject_order(o["id"], str(exc))
             logger.warning("Pending fill failed for %s: %s", o["ticker"], exc)
     return filled
 

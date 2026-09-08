@@ -846,6 +846,9 @@ def _resolve_portfolio(db: Database, user_id: str, portfolio_id: str = "") -> st
     from . import paper
 
     if portfolio_id:
+        portfolio = db.pt_get_portfolio(portfolio_id)
+        if portfolio is None or portfolio.get("user_id", "") != user_id:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
         return portfolio_id
     return paper.ensure_default_portfolio(db, user_id)["id"]
 
@@ -880,7 +883,7 @@ def paper_delete_portfolio(portfolio_id: str, user: dict = Depends(auth.current_
 
     db = _paper_db()
     try:
-        paper.pt_delete_portfolio(db, portfolio_id)
+        paper.pt_delete_portfolio(db, _resolve_portfolio(db, user["id"], portfolio_id))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     return {"deleted": portfolio_id}
@@ -892,7 +895,7 @@ def paper_reset_portfolio(portfolio_id: str, user: dict = Depends(auth.current_u
 
     db = _paper_db()
     try:
-        return paper.pt_reset_portfolio(db, portfolio_id)
+        return paper.pt_reset_portfolio(db, _resolve_portfolio(db, user["id"], portfolio_id))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
@@ -905,6 +908,7 @@ def paper_set_balance(
 
     db = _paper_db()
     try:
+        portfolio_id = _resolve_portfolio(db, user["id"], portfolio_id)
         paper.pt_set_balance(db, portfolio_id, float(body.get("balance", 0.0)))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -918,6 +922,7 @@ def paper_set_market_hours(
     from . import paper
 
     db = _paper_db()
+    portfolio_id = _resolve_portfolio(db, user["id"], portfolio_id)
     paper.pt_set_enforce_market_hours(db, portfolio_id, bool(body.get("enforce", False)))
     return paper.pt_get_portfolio(db, portfolio_id)
 
@@ -974,6 +979,10 @@ def paper_cancel_order(order_id: str, user: dict = Depends(auth.current_user)) -
 
     db = _paper_db()
     try:
+        order = db.pt_get_order(order_id)
+        if order is None:
+            raise ValueError("Order not found")
+        _resolve_portfolio(db, user["id"], order["portfolio_id"])
         paper.pt_cancel_order(db, order_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -1010,6 +1019,10 @@ def paper_convert_position(
 
     db = _paper_db()
     try:
+        position = db.pt_get_position(position_id)
+        if position is None:
+            raise ValueError("Position not found")
+        _resolve_portfolio(db, user["id"], position["portfolio_id"])
         paper.pt_convert_position_product(db, position_id, str(body.get("product", "")))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -1079,10 +1092,8 @@ def paper_settle(
     from . import paper
 
     db = _paper_db()
-    if portfolio_id:
-        n = paper.pt_settle_intraday(db, portfolio_id)
-    else:
-        n = paper.pt_settle_intraday_all(db)
+    pid = _resolve_portfolio(db, user["id"], portfolio_id)
+    n = paper.pt_settle_intraday(db, pid)
     return {"squared_off": n}
 
 
